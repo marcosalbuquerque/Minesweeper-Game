@@ -1,23 +1,33 @@
 package com.albuquerque.minesweeper.model;
 
-import com.albuquerque.minesweeper.exception.ExplosionException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 public class Field {
 
 
     private boolean mine;
     private boolean open;
-    private boolean marked;
+    private boolean flagged;
 
-    private List<Field> neighbors = new ArrayList<>();
+    private final List<Field> neighbors = new ArrayList<>();
+    private final List<FieldObserver> observers = new ArrayList<>();
+
     private final int x, y;
 
     Field(int x, int y) {
         this.x = x;
         this.y = y;
+    }
+
+    public void registerObserver(FieldObserver observer) {
+        observers.add(observer);
+    }
+
+    private void notifyObservers(FieldEvent event) {
+        observers.forEach(obs -> obs.eventOccurred(this, event));
     }
 
     boolean addNeighbor(Field neighbor) {
@@ -32,18 +42,22 @@ public class Field {
 
     }
 
-    void toggleMark() {
+    public void toggleFlag() {
         if (!open)
-            marked = !marked;
+            flagged = !flagged;
+
+        if(isFlagged()) notifyObservers(FieldEvent.FLAG);
+        if(!isFlagged()) notifyObservers(FieldEvent.UNFLAG);
     }
 
-    boolean open() {
-        if (!isOpen() && !isMarked()) {
-            open = true;
-
+    public boolean open() {
+        if (!isOpen() && !isFlagged()) {
             if (hasMine()) {
-                throw new ExplosionException();
+                notifyObservers(FieldEvent.EXPLODE);
+                return true;
             }
+
+            setOpen(true);
 
             if (safeNeighbor())
                 neighbors.forEach(Field::open);
@@ -56,18 +70,25 @@ public class Field {
     void placeMine() {
         mine = true;
     }
-    boolean safeNeighbor() {
+
+    public boolean safeNeighbor() {
         return neighbors.stream().noneMatch(n -> n.mine);
     }
 
-    boolean isMarked() {
-        return marked;
+    boolean isFlagged() {
+        return flagged;
     }
     boolean isOpen() {
         return open;
     }
 
-    boolean hasMine() {
+    void setOpen(boolean open) {
+        this.open = open;
+
+        if (open) notifyObservers(FieldEvent.OPEN);
+    }
+
+    public boolean hasMine() {
         return mine;
     }
 
@@ -81,32 +102,20 @@ public class Field {
 
     boolean goalAchieved() {
         boolean correctopen = isOpen() && !hasMine();
-        boolean correctmark = !isOpen() && isMarked() && hasMine();
+        boolean correctmark = !isOpen() && isFlagged() && hasMine();
 
         return correctopen || correctmark;
     }
 
-    long amountMineNeighbor() {
+    public long amountMineNeighbor() {
         return neighbors.stream().filter(Field::hasMine).count();
     }
 
     void restart() {
         mine = false;
-        marked = false;
+        flagged = false;
         open = false;
+        notifyObservers(FieldEvent.RESTART);
     }
 
-    @Override
-    public String toString() {
-        if (isMarked())
-            return "x";
-        else if (isOpen() && hasMine())
-            return "*";
-        else if (isOpen() && amountMineNeighbor() > 0)
-            return Long.toString(amountMineNeighbor());
-        else if (isOpen())
-            return " ";
-        else
-            return "?";
-    }
 }

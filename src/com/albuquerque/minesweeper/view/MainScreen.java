@@ -7,7 +7,7 @@ import javax.swing.*;
 public class MainScreen extends JFrame {
 
     public MainScreen() {
-        Board board = new Board(16, 30, 50);
+        Board board = new Board(16, 30, 30);
 
         add(new BoardPane(board));
 
